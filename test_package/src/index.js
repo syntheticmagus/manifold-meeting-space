@@ -25,9 +25,13 @@ canvas.style.display = "block";
 div.appendChild(canvas);
 
 let assetsHostUrl;
+let registryUrl;
 if (DEV_BUILD) {
     assetsHostUrl = "http://127.0.0.1:8181/";
+    registryUrl = "http://127.0.0.1:3000/";
 } else {
     assetsHostUrl = "https://syntheticmagus.github.io/manifold-meeting-space-assets/";
+    registryUrl = "https://manifold-meeting-space.herokuapp.com/";
 }
+
 initializeBabylonApp({ canvas: canvas, assetsHostUrl: assetsHostUrl });

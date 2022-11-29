@@ -2,21 +2,18 @@ import { Engine } from "@babylonjs/core/Engines/engine";
 import { SceneLoader } from "@babylonjs/core/Loading/sceneLoader";
 import { Scene } from "@babylonjs/core/scene";
 
-class Playground {
+export class MeetingSpace {
     public static async CreateScene(engine: Engine, assetsHostUrl: string): Promise<Scene> {
         var scene = new Scene(engine);
-        await SceneLoader.ImportMeshAsync("", assetsHostUrl, "hex_table.glb");
-        scene.createDefaultCameraOrLight();
+        scene.createDefaultLight();
+        
+        await SceneLoader.ImportMeshAsync("", assetsHostUrl, "vr_room.glb");
 
-        const env = scene.createDefaultEnvironment();
+        const env = scene.createDefaultEnvironment({ createGround: false, createSkybox: false });
         const xr = await scene.createDefaultXRExperienceAsync({
-            floorMeshes: [env!.ground!]
+            floorMeshes: [scene.getMeshByName("floor")!]
         });
 
         return scene;
     }
-}
-
-export async function CreatePlaygroundScene(engine: Engine, assetsHostUrl: string): Promise<Scene> {
-    return await Playground.CreateScene(engine, assetsHostUrl);
 }
