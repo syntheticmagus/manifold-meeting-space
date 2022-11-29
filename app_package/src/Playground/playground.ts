@@ -6,7 +6,12 @@ class Playground {
     public static async CreateScene(engine: Engine, assetsHostUrl: string): Promise<Scene> {
         var scene = new Scene(engine);
         await SceneLoader.ImportMeshAsync("", assetsHostUrl, "hex_table.glb");
-        scene.createDefaultCameraOrLight(true, true, true);
+        scene.createDefaultCameraOrLight();
+
+        const env = scene.createDefaultEnvironment();
+        const xr = await scene.createDefaultXRExperienceAsync({
+            floorMeshes: [env!.ground!]
+        });
 
         return scene;
     }
