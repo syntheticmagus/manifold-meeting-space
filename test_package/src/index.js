@@ -28,6 +28,6 @@ let assetsHostUrl;
 if (DEV_BUILD) {
     assetsHostUrl = "http://127.0.0.1:8181/";
 } else {
-    assetsHostUrl = "https://nonlocal-assets-host-url/";
+    assetsHostUrl = "https://syntheticmagus.github.io/manifold-meeting-space-assets/";
 }
 initializeBabylonApp({ canvas: canvas, assetsHostUrl: assetsHostUrl });
