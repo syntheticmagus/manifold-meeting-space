@@ -114,20 +114,26 @@ export class MeetingSpaceScene extends Scene {
         const xr = await this.createDefaultXRExperienceAsync({
             floorMeshes: [this.getMeshByName("floor")!]
         });
+        xr.baseExperience.camera.rotationQuaternion = Quaternion.Identity();
 
         // TODO: This should probably be moved to the local attendee.
         const scene = this;
         scene.onBeforeRenderObservable.runCoroutineAsync(function* () {
+            let message: any;
+
             while (!scene.isDisposed) {
                 if (xr.baseExperience.sessionManager.inXRSession) {
-                    scene._remoteAttendees.forEach((attendee) => {
-                        // TODO: Send XR transforms.
-                    });
+                    message = RemoteAttendee.CreateXrTransformsMessage(
+                        xr.baseExperience.camera.position,
+                        xr.baseExperience.camera.rotationQuaternion
+                        // TODO: Controllers/hands
+                    );
                 } else {
-                    scene._remoteAttendees.forEach((attendee) => {
-                        attendee.sendLocalCameraTransform(camera.position, camera.rotationQuaternion);
-                    });
+                    message = RemoteAttendee.CreateCameraTransformsMessage(camera.position, camera.rotationQuaternion);
                 }
+                scene._remoteAttendees.forEach((attendee) => {
+                    attendee.sendMessage(message);
+                });
 
                 yield Tools.DelayAsync(0.1);
             }

@@ -8,7 +8,8 @@ import { Nullable } from "@babylonjs/core/types";
 import { AsyncDataConnection, AsyncMediaConnection } from "./asyncPeer";
 
 export enum MessageType {
-    LocalCameraTransform
+    CameraTransform,
+    XrTransforms
 }
 
 export class RemoteAttendee {
@@ -18,7 +19,13 @@ export class RemoteAttendee {
     private _dataConnectionObserver: Nullable<Observer<void>>;
     private _mediaConnectionObserver: Nullable<Observer<void>>;
 
+    private _audioStreamNode: TransformNode;
     private _cameraNode: TransformNode;
+    private _headNode: TransformNode;
+    private _leftHandNode: TransformNode;
+    private _rightHandNode: TransformNode;
+
+    private _audioStream?: Sound;
 
     private _onDisconnectedObservable: Observable<void>;
     public get OnDisconnectedObservable(): Observable<void> {
@@ -38,51 +45,139 @@ export class RemoteAttendee {
             this._onDisconnectedObservable.notifyObservers();
         });
 
-        this._cameraNode = new TransformNode("remoteAttendee_head", scene);
-        this._cameraNode.position.set(0, 1, 0);
+        this._audioStreamNode = new TransformNode("remoteAttendee_audioStream", scene);
+        this._cameraNode = new TransformNode("remoteAttendee_camera", scene);
         this._cameraNode.rotationQuaternion = Quaternion.Identity();
+        this._headNode = new TransformNode("remoteAttendee_head", scene);
+        this._headNode.rotationQuaternion = Quaternion.Identity();
+        this._leftHandNode = new TransformNode("remoteAttendee_leftHand", scene);
+        this._leftHandNode.rotationQuaternion = Quaternion.Identity();
+        this._rightHandNode = new TransformNode("remoteAttendee_rightHand", scene);
+        this._rightHandNode.rotationQuaternion = Quaternion.Identity();
+
+        this._cameraNode.setEnabled(false);
+        this._headNode.setEnabled(false);
+        this._leftHandNode.setEnabled(false);
+        this._rightHandNode.setEnabled(false);
 
         this._dataConnection.onDataObservable.add((data) => {
             const message = JSON.parse(data);
 
+            let position: any;
+            let rotation: any;
             switch (message.type) {
-                case MessageType.LocalCameraTransform:
-                    this._cameraNode.position.set(message.position[0], message.position[1], message.position[2]);
-                    this._cameraNode.rotationQuaternion!.set(message.rotation[0], message.rotation[1], message.rotation[2], message.rotation[3]);
+                case MessageType.CameraTransform:
+                    position = message.position;
+                    rotation = message.rotation;
+                    this._audioStreamNode.position.set(position[0], position[1], position[2]);
+                    this._cameraNode.position.set(position[0], position[1], position[2]);
+                    this._cameraNode.rotationQuaternion!.set(rotation[0], rotation[1], rotation[2], rotation[3]);
+                    this._cameraNode.setEnabled(true);
+                    
+                    this._headNode.setEnabled(false);
+                    this._leftHandNode.setEnabled(false);
+                    this._rightHandNode.setEnabled(false);
+                    break;
+                case MessageType.XrTransforms:
+                    position = message.headPosition;
+                    rotation = message.headRotation;
+                    this._audioStreamNode.position.set(position[0], position[1], position[2]);
+                    this._headNode.position.set(position[0], position[1], position[2]);
+                    this._headNode.rotationQuaternion!.set(rotation[0], rotation[1], rotation[2], rotation[3]);
+                    this._headNode.setEnabled(true);
+                    
+                    if (message.leftHandPosition && message.leftHandRotation) {
+                        position = message.leftHandPosition;
+                        rotation = message.leftHandRotation;
+                        this._leftHandNode.position.set(position[0], position[1], position[2]);
+                        this._leftHandNode.rotationQuaternion!.set(rotation[0], rotation[1], rotation[2], rotation[3]);
+                        this._leftHandNode.setEnabled(true);
+                    } else {
+                        this._leftHandNode.setEnabled(false);
+                    }
+                    
+                    if (message.rightHandPosition && message.rightHandRotation) {
+                        position = message.rightHandPosition;
+                        rotation = message.rightHandRotation;
+                        this._rightHandNode.position.set(position[0], position[1], position[2]);
+                        this._rightHandNode.rotationQuaternion!.set(rotation[0], rotation[1], rotation[2], rotation[3]);
+                        this._rightHandNode.setEnabled(true);
+                    } else {
+                        this._rightHandNode.setEnabled(false);
+                    }
+                    
+                    this._cameraNode.setEnabled(false);
                     break;
             }
         });
 
-        let sound: Sound;
         mediaConnection.onStreamObservable.add(() => {
-            if (sound) {
-                sound.dispose();
-            }
+            this._audioStream?.dispose();
             mediaConnection.workAroundChromeRemoteAudioStreamBug();
-            sound = new Sound("remoteAttendee", mediaConnection.remoteStream, scene, null, { autoplay: true });
-            sound.attachToMesh(this._cameraNode);
+            this._audioStream = new Sound("remoteAttendee_audioStream", mediaConnection.remoteStream, scene, null, { autoplay: true });
+            this._audioStream.attachToMesh(this._audioStreamNode);
         });
 
-        // TODO: Actually do something with the connections.
-        const box = MeshBuilder.CreateBox("box", { size: 0.2 }, scene);
-        box.parent = this._cameraNode;
+        // TODO: Create the actual visuals.
+        const cameraBox = MeshBuilder.CreateBox("remoteAttendee_cameraBox", { size: 0.2 }, scene);
+        cameraBox.parent = this._cameraNode;
+        const headBox = MeshBuilder.CreateBox("remoteAttendee_headBox", { size: 0.2 }, scene);
+        headBox.parent = this._headNode;
+        const leftHandBox = MeshBuilder.CreateBox("remoteAttendee_leftHandBox", { size: 0.05 }, scene);
+        leftHandBox.parent = this._leftHandNode;
+        const rightHandBox = MeshBuilder.CreateBox("remoteAttendee_rightHandBox", { size: 0.05 }, scene);
+        rightHandBox.parent = this._rightHandNode;
     }
 
-    public sendLocalCameraTransform(position: Vector3, rotation: Quaternion): void {
-        this._dataConnection.send(JSON.stringify({
-            type: MessageType.LocalCameraTransform,
-            position: [position.x, position.y, position.z],
-            rotation: [rotation.x, rotation.y, rotation.z, rotation.w]
-        }));
+    public sendMessage(message: any): void {
+        this._dataConnection.send(JSON.stringify(message));
     }
 
     public dispose(): void {
+        this._audioStreamNode.dispose();
         this._cameraNode.dispose();
+        this._headNode.dispose();
+        this._leftHandNode.dispose();
+        this._rightHandNode.dispose();
+
+        this._audioStream?.dispose();
 
         this._dataConnection.onTerminatedObservable.remove(this._dataConnectionObserver);
         this._mediaConnection.onTerminatedObservable.remove(this._mediaConnectionObserver);
 
         this._dataConnection.dispose();
         this._mediaConnection.dispose();
+    }
+
+    public static CreateCameraTransformsMessage(position: Vector3, rotation: Quaternion): any {
+        return {
+            type: MessageType.CameraTransform,
+            position: [position.x, position.y, position.z],
+            rotation: [rotation.x, rotation.y, rotation.z, rotation.w]
+        };
+    }
+
+    public static CreateXrTransformsMessage(
+        headPosition: Vector3, 
+        headRotation: Quaternion, 
+        leftHandPosition?: Vector3, 
+        leftHandRotation?: Quaternion, 
+        rightHandPosition?: Vector3, 
+        rightHandRotation?: Quaternion): any {
+        
+        const message: any = {
+            type: MessageType.XrTransforms,
+            headPosition: [headPosition.x, headPosition.y, headPosition.z],
+            headRotation: [headRotation.x, headRotation.y, headRotation.z, headRotation.w]
+        };
+        if (leftHandPosition && leftHandRotation) {
+            message.leftHandPosition = [leftHandPosition.x, leftHandPosition.y, leftHandPosition.z];
+            message.leftHandRotation = [leftHandRotation.x, leftHandRotation.y, leftHandRotation.z, leftHandRotation.w];
+        }
+        if (rightHandPosition && rightHandRotation) {
+            message.rightHandPosition = [rightHandPosition.x, rightHandPosition.y, rightHandPosition.z];
+            message.rightHandRotation = [rightHandRotation.x, rightHandRotation.y, rightHandRotation.z, rightHandRotation.w];
+        }
+        return message;
     }
 }
