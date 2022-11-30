@@ -1,5 +1,5 @@
 import { Engine } from "@babylonjs/core";
-import { MeetingSpaceScene, MeetingSpaceSceneParams } from "./meetingSpaceScene";
+import { MeetingSpaceScene, IMeetingSpaceSceneParams } from "./meetingSpaceScene";
 import "@babylonjs/loaders";
 
 export interface InitializeBabylonAppOptions {
@@ -16,7 +16,7 @@ export function initializeBabylonApp(options: InitializeBabylonAppOptions) {
 
     const canvas = options.canvas;
     const engine = new Engine(canvas);
-    const params: MeetingSpaceSceneParams = {
+    const params: IMeetingSpaceSceneParams = {
         engine: engine,
         assetsHostUrl: options.assetsHostUrl,
         registryUrl: options.registryUrl,

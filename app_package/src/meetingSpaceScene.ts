@@ -1,13 +1,16 @@
 import { FreeCamera } from "@babylonjs/core/Cameras/freeCamera";
 import { Engine } from "@babylonjs/core/Engines/engine";
 import { SceneLoader } from "@babylonjs/core/Loading/sceneLoader";
-import { Vector3 } from "@babylonjs/core/Maths/math.vector";
+import { Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { Scene } from "@babylonjs/core/scene";
-import { AsyncPeer } from "./asyncPeer";
+import { AsyncDataConnection, AsyncMediaConnection, AsyncPeer } from "./asyncPeer";
 import { LocalAttendee } from "./localAttendee";
 import { RemoteAttendee } from "./remoteAttendee";
+import { Tools } from "@babylonjs/core/Misc/tools";
 
-export interface MeetingSpaceSceneParams {
+// import "@babylonjs/inspector";
+
+export interface IMeetingSpaceSceneParams {
     engine: Engine;
     assetsHostUrl: string;
     registryUrl: string;
@@ -22,7 +25,7 @@ export class MeetingSpaceScene extends Scene {
     private _localAttendee: LocalAttendee;
     private _remoteAttendees: Map<string, RemoteAttendee>;
 
-    private constructor(params: MeetingSpaceSceneParams, peer: AsyncPeer, localAttendee: LocalAttendee) {
+    private constructor(params: IMeetingSpaceSceneParams, peer: AsyncPeer, localAttendee: LocalAttendee) {
         super(params.engine);
 
         this._assetsHostUrl = params.assetsHostUrl;
@@ -39,7 +42,7 @@ export class MeetingSpaceScene extends Scene {
 
             const mediaConnection = peer.createMediaConnection(dataConnection.peerId, localAttendee.AudioStream);
 
-            this._remoteAttendees.set(dataConnection.peerId, new RemoteAttendee(this, dataConnection, mediaConnection));
+            this._addRemoteAttendee(dataConnection, mediaConnection);
         });
     }
 
@@ -51,6 +54,17 @@ export class MeetingSpaceScene extends Scene {
         this._peer.dispose();
 
         super.dispose();
+    }
+
+    private _addRemoteAttendee(dataConnection: AsyncDataConnection, mediaConnection: AsyncMediaConnection) {
+        const peerId = dataConnection.peerId;
+        const attendee = new RemoteAttendee(this, dataConnection, mediaConnection);
+        this._remoteAttendees.set(peerId, attendee);
+
+        attendee.OnDisconnectedObservable.addOnce(() => {
+            this._remoteAttendees.delete(peerId);
+            attendee.dispose();
+        });
     }
 
     private async _joinAsync(): Promise<string[]> {
@@ -79,7 +93,8 @@ export class MeetingSpaceScene extends Scene {
 
                 this._peer.onMediaConnectionObservable.remove(observer);
 
-                this._remoteAttendees.set(peerId, new RemoteAttendee(this, dataConnection, mediaConnection));
+                mediaConnection.answer(this._localAttendee.AudioStream);
+                this._addRemoteAttendee(dataConnection, mediaConnection);
             });
         });
     }
@@ -89,6 +104,7 @@ export class MeetingSpaceScene extends Scene {
         await SceneLoader.ImportMeshAsync("", this._assetsHostUrl, "vr_room.glb");
 
         const camera = new FreeCamera("camera", new Vector3(0, 1.6, 0), this, true);
+        camera.rotationQuaternion = Quaternion.Identity();
         camera.attachControl();
         camera.speed = 0.04;
         camera.minZ = 0.01;
@@ -98,9 +114,27 @@ export class MeetingSpaceScene extends Scene {
         const xr = await this.createDefaultXRExperienceAsync({
             floorMeshes: [this.getMeshByName("floor")!]
         });
+
+        // TODO: This should probably be moved to the local attendee.
+        const scene = this;
+        scene.onBeforeRenderObservable.runCoroutineAsync(function* () {
+            while (!scene.isDisposed) {
+                if (xr.baseExperience.sessionManager.inXRSession) {
+                    scene._remoteAttendees.forEach((attendee) => {
+                        // TODO: Send XR transforms.
+                    });
+                } else {
+                    scene._remoteAttendees.forEach((attendee) => {
+                        attendee.sendLocalCameraTransform(camera.position, camera.rotationQuaternion);
+                    });
+                }
+
+                yield Tools.DelayAsync(0.1);
+            }
+        }());
     }
 
-    public static async CreateAsync(params: MeetingSpaceSceneParams): Promise<MeetingSpaceScene> {
+    public static async CreateAsync(params: IMeetingSpaceSceneParams): Promise<MeetingSpaceScene> {
         const peer = await AsyncPeer.CreateAsync();
         const localAttendee = await LocalAttendee.CreateAsync();
         const meetingSpace = new MeetingSpaceScene(params, peer, localAttendee);

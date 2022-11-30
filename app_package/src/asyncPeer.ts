@@ -40,10 +40,10 @@ export class AsyncMediaConnection {
     // Workaround for a very old Chrome bug
     // Bug: https://bugs.chromium.org/p/chromium/issues/detail?id=933677
     // Workaround: https://stackoverflow.com/questions/24287054/chrome-wont-play-webaudio-getusermedia-via-webrtc-peer-js
-    public workAroundChromeRemoteAudioStreamBug(stream: MediaStream) {
+    public workAroundChromeRemoteAudioStreamBug() {
         let audio = new Audio();
         audio.muted = true;
-        audio.srcObject = stream;
+        audio.srcObject = this._connection.remoteStream;
     }
 
     public dispose() {
