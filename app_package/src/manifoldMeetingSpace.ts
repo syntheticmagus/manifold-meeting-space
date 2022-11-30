@@ -1,10 +1,12 @@
 import { Engine } from "@babylonjs/core";
-import { MeetingSpace } from "./meetingSpace";
+import { MeetingSpaceScene, MeetingSpaceSceneParams } from "./meetingSpaceScene";
 import "@babylonjs/loaders";
 
 export interface InitializeBabylonAppOptions {
     canvas: HTMLCanvasElement;
-    assetsHostUrl?: string;
+    assetsHostUrl: string;
+    registryUrl: string;
+    space: string;
 }
 
 export function initializeBabylonApp(options: InitializeBabylonAppOptions) {
@@ -14,7 +16,13 @@ export function initializeBabylonApp(options: InitializeBabylonAppOptions) {
 
     const canvas = options.canvas;
     const engine = new Engine(canvas);
-    MeetingSpace.CreateScene(engine, options.assetsHostUrl!).then((scene) => {
+    const params: MeetingSpaceSceneParams = {
+        engine: engine,
+        assetsHostUrl: options.assetsHostUrl,
+        registryUrl: options.registryUrl,
+        space: options.space
+    };
+    MeetingSpaceScene.CreateAsync(params).then((scene) => {
         engine.runRenderLoop(() => {
             scene.render();
         });
@@ -23,4 +31,3 @@ export function initializeBabylonApp(options: InitializeBabylonAppOptions) {
         });
     });
 }
-
