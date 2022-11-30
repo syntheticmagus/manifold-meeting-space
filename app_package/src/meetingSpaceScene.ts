@@ -7,6 +7,9 @@ import { AsyncDataConnection, AsyncMediaConnection, AsyncPeer } from "./asyncPee
 import { LocalAttendee } from "./localAttendee";
 import { RemoteAttendee } from "./remoteAttendee";
 import { Tools } from "@babylonjs/core/Misc/tools";
+import { Nullable } from "@babylonjs/core/types";
+import { WebXRAbstractMotionController } from "@babylonjs/core/XR/motionController/webXRAbstractMotionController";
+import { WebXRInputSource } from "@babylonjs/core/XR/webXRInputSource";
 
 // import "@babylonjs/inspector";
 
@@ -116,6 +119,19 @@ export class MeetingSpaceScene extends Scene {
         });
         xr.baseExperience.camera.rotationQuaternion = Quaternion.Identity();
 
+        let leftController: WebXRInputSource | undefined;
+        let rightController: WebXRInputSource | undefined;
+        xr.input.onControllerAddedObservable.add((controller) => {
+            controller.onMotionControllerInitObservable.add((motionController) => {
+                if (motionController.handedness === "left") {
+                    leftController = controller;
+                } else if (motionController.handedness === "right") {
+                    rightController = controller;
+                }
+                controller.grip!.rotationQuaternion = Quaternion.Identity();
+            });
+        });
+
         // TODO: This should probably be moved to the local attendee.
         const scene = this;
         scene.onBeforeRenderObservable.runCoroutineAsync(function* () {
@@ -125,8 +141,11 @@ export class MeetingSpaceScene extends Scene {
                 if (xr.baseExperience.sessionManager.inXRSession) {
                     message = RemoteAttendee.CreateXrTransformsMessage(
                         xr.baseExperience.camera.position,
-                        xr.baseExperience.camera.rotationQuaternion
-                        // TODO: Controllers/hands
+                        xr.baseExperience.camera.rotationQuaternion,
+                        leftController ? leftController.grip?.position : undefined,
+                        leftController ? leftController.grip?.rotationQuaternion! : undefined,
+                        rightController ? rightController.grip?.position : undefined,
+                        rightController ? rightController.grip?.rotationQuaternion! : undefined,
                     );
                 } else {
                     message = RemoteAttendee.CreateCameraTransformsMessage(camera.position, camera.rotationQuaternion);
