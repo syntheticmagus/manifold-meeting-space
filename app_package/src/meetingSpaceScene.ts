@@ -10,6 +10,7 @@ import { Tools } from "@babylonjs/core/Misc/tools";
 import { Nullable } from "@babylonjs/core/types";
 import { WebXRAbstractMotionController } from "@babylonjs/core/XR/motionController/webXRAbstractMotionController";
 import { WebXRInputSource } from "@babylonjs/core/XR/webXRInputSource";
+import { WebXRFeatureName } from "@babylonjs/core/XR/webXRFeaturesManager";
 
 // import "@babylonjs/inspector";
 
@@ -17,89 +18,28 @@ export interface IMeetingSpaceSceneParams {
     engine: Engine;
     assetsHostUrl: string;
     registryUrl: string;
-    space: string;
 }
 
 export class MeetingSpaceScene extends Scene {
     private _assetsHostUrl: string;
     private _registryUrl: string;
-    private _space: string;
-    private _peer: AsyncPeer;
+    private _peer?: AsyncPeer;
     private _localAttendee: LocalAttendee;
     private _remoteAttendees: Map<string, RemoteAttendee>;
 
-    private constructor(params: IMeetingSpaceSceneParams, peer: AsyncPeer, localAttendee: LocalAttendee) {
+    private constructor(params: IMeetingSpaceSceneParams, localAttendee: LocalAttendee) {
         super(params.engine);
 
         this._assetsHostUrl = params.assetsHostUrl;
         this._registryUrl = params.registryUrl;
-        this._space = params.space;
-        this._peer = peer;
         this._localAttendee = localAttendee;
         this._remoteAttendees = new Map<string, RemoteAttendee>();
-
-        // Handle connections from attendees who join after we do.
-        peer.onDataConnectionObservable.add((dataConnection) => {
-            // TODO: Decide whether to accept this connection, then either accept or reject it
-            // and respond with a media connection accordingly.
-
-            const mediaConnection = peer.createMediaConnection(dataConnection.peerId, localAttendee.AudioStream);
-
-            this._addRemoteAttendee(dataConnection, mediaConnection);
-        });
     }
 
     public dispose() {
-        this._remoteAttendees.forEach((remoteAttendee) => {
-            remoteAttendee.dispose();
-        });
+        this.leaveSpace();
         this._localAttendee.dispose();
-        this._peer.dispose();
-
         super.dispose();
-    }
-
-    private _addRemoteAttendee(dataConnection: AsyncDataConnection, mediaConnection: AsyncMediaConnection) {
-        const peerId = dataConnection.peerId;
-        const attendee = new RemoteAttendee(this, dataConnection, mediaConnection);
-        this._remoteAttendees.set(peerId, attendee);
-
-        attendee.OnDisconnectedObservable.addOnce(() => {
-            this._remoteAttendees.delete(peerId);
-            attendee.dispose();
-        });
-    }
-
-    private async _joinAsync(): Promise<string[]> {
-        const response = await fetch(`${this._registryUrl}join`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                space: this._space,
-                id: this._peer.id
-            })
-        });
-        const json = await response.json();
-        return json.ids as string[];
-    }
-
-    private _connectToPeer(peerId: string): void {
-        this._peer.createDataConnectionAsync(peerId).then((dataConnection) => {
-            // TODO: Provide anything the remote peer needs to accept the connection.
-
-            const observer = this._peer.onMediaConnectionObservable.add((mediaConnection) => {
-                if (mediaConnection.peerId != peerId) {
-                    return;
-                }
-
-                this._peer.onMediaConnectionObservable.remove(observer);
-
-                mediaConnection.answer(this._localAttendee.AudioStream);
-                this._addRemoteAttendee(dataConnection, mediaConnection);
-            });
-        });
     }
 
     private async _initializeVisualsAsync(): Promise<void> {
@@ -118,6 +58,10 @@ export class MeetingSpaceScene extends Scene {
             floorMeshes: [this.getMeshByName("floor")!]
         });
         xr.baseExperience.camera.rotationQuaternion = Quaternion.Identity();
+
+        xr.baseExperience.featuresManager.enableFeature(WebXRFeatureName.HAND_TRACKING, "latest", {
+            xrInput: xr.input
+        });
 
         let leftController: WebXRInputSource | undefined;
         let rightController: WebXRInputSource | undefined;
@@ -159,19 +103,78 @@ export class MeetingSpaceScene extends Scene {
         }());
     }
 
-    public static async CreateAsync(params: IMeetingSpaceSceneParams): Promise<MeetingSpaceScene> {
-        const peer = await AsyncPeer.CreateAsync();
-        const localAttendee = await LocalAttendee.CreateAsync();
-        const meetingSpace = new MeetingSpaceScene(params, peer, localAttendee);
+    private _addRemoteAttendee(dataConnection: AsyncDataConnection, mediaConnection: AsyncMediaConnection) {
+        const peerId = dataConnection.peerId;
+        const attendee = new RemoteAttendee(this, dataConnection, mediaConnection);
+        this._remoteAttendees.set(peerId, attendee);
 
-        // Handle connections to attendees who joined before us.
-        const peerIds = await meetingSpace._joinAsync();
-        peerIds.forEach((id) => {
-            meetingSpace._connectToPeer(id);
+        attendee.OnDisconnectedObservable.addOnce(() => {
+            this._remoteAttendees.delete(peerId);
+            attendee.dispose();
+        });
+    }
+
+    private _connectToPeer(peerId: string): void {
+        this._peer!.createDataConnectionAsync(peerId).then((dataConnection) => {
+            // TODO: Provide anything the remote peer needs to accept the connection.
+
+            const observer = this._peer!.onMediaConnectionObservable.add((mediaConnection) => {
+                if (mediaConnection.peerId != peerId) {
+                    return;
+                }
+
+                this._peer!.onMediaConnectionObservable.remove(observer);
+
+                mediaConnection.answer(this._localAttendee.AudioStream);
+                this._addRemoteAttendee(dataConnection, mediaConnection);
+            });
+        });
+    }
+
+    public async joinSpaceAsync(space: string): Promise<void> {
+        await this._localAttendee.startAudioStreamAsync();
+        this._peer = await AsyncPeer.CreateAsync();
+
+        // Handle connections from attendees who join after we do.
+        this._peer.onDataConnectionObservable.add((dataConnection) => {
+            // TODO: Decide whether to accept this connection, then either accept or reject it
+            // and respond with a media connection accordingly.
+
+            const mediaConnection = this._peer!.createMediaConnection(dataConnection.peerId, this._localAttendee.AudioStream);
+
+            this._addRemoteAttendee(dataConnection, mediaConnection);
         });
 
-        await meetingSpace._initializeVisualsAsync();
+        const response = await fetch(`${this._registryUrl}join`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                space: space,
+                id: this._peer!.id
+            })
+        });
+        const json = await response.json();
+        const peerIds = json.ids as string[];
 
+        peerIds.forEach((id) => {
+            this._connectToPeer(id);
+        });
+    }
+
+    public leaveSpace(): void {
+        this._remoteAttendees.forEach((remoteAttendee) => {
+            remoteAttendee.dispose();
+        });
+        this._peer?.dispose();
+        this._localAttendee.stopAudioStream();
+    }
+
+    public static async CreateAsync(params: IMeetingSpaceSceneParams): Promise<MeetingSpaceScene> {
+        const localAttendee = new LocalAttendee();
+        const meetingSpace = new MeetingSpaceScene(params, localAttendee);
+        await meetingSpace._initializeVisualsAsync();
         return meetingSpace;
     }
 }
