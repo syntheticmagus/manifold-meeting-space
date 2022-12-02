@@ -43,9 +43,13 @@ export class MeetingSpaceScene extends Scene {
     }
 
     private async _initializeVisualsAsync(): Promise<void> {
-        let roomAtlasResolution = "16k";
+        let roomAtlasResolution;
         if (navigator.userAgent.indexOf("Quest 2") >= 0) {
             roomAtlasResolution = "4k";
+        } else if (navigator.userAgent.indexOf("Quest") >= 0) {
+            roomAtlasResolution = "8k";
+        } else {
+            roomAtlasResolution = "16k";
         }
         await SceneLoader.ImportMeshAsync("", this._assetsHostUrl, `manifold_room_${roomAtlasResolution}.glb`);
 
