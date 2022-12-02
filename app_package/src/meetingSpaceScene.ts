@@ -44,7 +44,7 @@ export class MeetingSpaceScene extends Scene {
 
     private async _initializeVisualsAsync(): Promise<void> {
         this.createDefaultLight();
-        await SceneLoader.ImportMeshAsync("", this._assetsHostUrl, "manifold_room_8k.glb");
+        await SceneLoader.ImportMeshAsync("", this._assetsHostUrl, "manifold_room_4k.glb");
 
         const centerEnvironmentTexture = CubeTexture.CreateFromPrefilteredData(`${this._assetsHostUrl}/bake_environment_center.env`, this);
         this.environmentTexture = centerEnvironmentTexture;
@@ -75,7 +75,7 @@ export class MeetingSpaceScene extends Scene {
 
         xr.baseExperience.featuresManager.enableFeature(WebXRFeatureName.HAND_TRACKING, "latest", {
             xrInput: xr.input
-        });
+        }, undefined, false);
 
         let leftController: WebXRInputSource | undefined;
         let rightController: WebXRInputSource | undefined;
