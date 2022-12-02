@@ -43,8 +43,11 @@ export class MeetingSpaceScene extends Scene {
     }
 
     private async _initializeVisualsAsync(): Promise<void> {
-        this.createDefaultLight();
-        await SceneLoader.ImportMeshAsync("", this._assetsHostUrl, "manifold_room_4k.glb");
+        let roomAtlasResolution = "16k";
+        if (navigator.userAgent.indexOf("Quest 2") >= 0) {
+            roomAtlasResolution = "4k";
+        }
+        await SceneLoader.ImportMeshAsync("", this._assetsHostUrl, `manifold_room_${roomAtlasResolution}.glb`);
 
         const centerEnvironmentTexture = CubeTexture.CreateFromPrefilteredData(`${this._assetsHostUrl}/bake_environment_center.env`, this);
         this.environmentTexture = centerEnvironmentTexture;
@@ -69,6 +72,7 @@ export class MeetingSpaceScene extends Scene {
         camera.maxZ = 100;
         
         const xr = await this.createDefaultXRExperienceAsync({
+            ignoreNativeCameraTransformation: true,
             floorMeshes: [this.getMeshByName("floor")!]
         });
         xr.baseExperience.camera.rotationQuaternion = Quaternion.Identity();
