@@ -12,6 +12,7 @@ import { WebXRFeatureName } from "@babylonjs/core/XR/webXRFeaturesManager";
 import { CubeTexture } from "@babylonjs/core/Materials/Textures/cubeTexture";
 import { PBRMaterial } from "@babylonjs/core/Materials/PBR/pbrMaterial";
 import { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
+import { WebXRHandTracking } from "@babylonjs/core/XR/features/WebXRHandTracking";
 
 //import "@babylonjs/inspector";
 
@@ -95,10 +96,6 @@ export class MeetingSpaceScene extends Scene {
         });
         xr.baseExperience.camera.rotationQuaternion = Quaternion.Identity();
 
-        xr.baseExperience.featuresManager.enableFeature(WebXRFeatureName.HAND_TRACKING, "latest", {
-            xrInput: xr.input
-        }, undefined, false);
-
         let leftController: WebXRInputSource | undefined;
         let rightController: WebXRInputSource | undefined;
         xr.input.onControllerAddedObservable.add((controller) => {
@@ -129,6 +126,18 @@ export class MeetingSpaceScene extends Scene {
                 }
                 controller.grip!.rotationQuaternion = Quaternion.Identity();
             });
+        });
+
+        const handFeature = xr.baseExperience.featuresManager.enableFeature(WebXRFeatureName.HAND_TRACKING, "latest", {
+            xrInput: xr.input
+        }, undefined, false) as WebXRHandTracking;
+        handFeature.onHandAddedObservable.add(() => {
+            this._leftHandMesh?.setEnabled(false);
+            this._rightHandMesh?.setEnabled(false);
+        });
+        handFeature.onHandRemovedObservable.add(() => {
+            this._leftHandMesh?.setEnabled(true);
+            this._rightHandMesh?.setEnabled(true);
         });
 
         // TODO: This should probably be moved to the local attendee.
