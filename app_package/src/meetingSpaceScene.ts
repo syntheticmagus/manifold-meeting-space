@@ -1,6 +1,6 @@
 import { FreeCamera } from "@babylonjs/core/Cameras/freeCamera";
 import { Engine } from "@babylonjs/core/Engines/engine";
-import { SceneLoader } from "@babylonjs/core/Loading/sceneLoader";
+import { ISceneLoaderAsyncResult, SceneLoader } from "@babylonjs/core/Loading/sceneLoader";
 import { Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { Scene } from "@babylonjs/core/scene";
 import { AsyncDataConnection, AsyncMediaConnection, AsyncPeer } from "./asyncPeer";
@@ -11,6 +11,7 @@ import { WebXRInputSource } from "@babylonjs/core/XR/webXRInputSource";
 import { WebXRFeatureName } from "@babylonjs/core/XR/webXRFeaturesManager";
 import { CubeTexture } from "@babylonjs/core/Materials/Textures/cubeTexture";
 import { PBRMaterial } from "@babylonjs/core/Materials/PBR/pbrMaterial";
+import { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 
 //import "@babylonjs/inspector";
 
@@ -26,6 +27,9 @@ export class MeetingSpaceScene extends Scene {
     private _peer?: AsyncPeer;
     private _localAttendee: LocalAttendee;
     private _remoteAttendees: Map<string, RemoteAttendee>;
+    private _leftHandMesh?: AbstractMesh;
+    private _rightHandMesh?: AbstractMesh;
+    private _headMesh?: AbstractMesh;
 
     private constructor(params: IMeetingSpaceSceneParams, localAttendee: LocalAttendee) {
         super(params.engine);
@@ -51,7 +55,16 @@ export class MeetingSpaceScene extends Scene {
         } else {
             roomAtlasResolution = "16k";
         }
-        await SceneLoader.ImportMeshAsync("", this._assetsHostUrl, `manifold_room_${roomAtlasResolution}.glb`);
+        await SceneLoader.ImportMeshAsync("", this._assetsHostUrl, `manifold_room_${roomAtlasResolution}.glb`, this);
+
+        const headAndHandsResult = await SceneLoader.ImportMeshAsync("", this._assetsHostUrl, "hands_and_head.glb", this);
+        this._leftHandMesh = this.getMeshByName("left_hand")!;
+        this._rightHandMesh = this.getMeshByName("right_hand")!;
+        this._headMesh = this.getMeshByName("head")!;
+
+        this._leftHandMesh.setEnabled(false);
+        this._rightHandMesh.setEnabled(false);
+        this._headMesh.dispose();
 
         const centerEnvironmentTexture = CubeTexture.CreateFromPrefilteredData(`${this._assetsHostUrl}/bake_environment_center.env`, this);
         this.environmentTexture = centerEnvironmentTexture;
@@ -90,10 +103,29 @@ export class MeetingSpaceScene extends Scene {
         let rightController: WebXRInputSource | undefined;
         xr.input.onControllerAddedObservable.add((controller) => {
             controller.onMotionControllerInitObservable.add((motionController) => {
+                motionController.onModelLoadedObservable.add((model) => {
+                    model.rootMesh?.setEnabled(false);
+                });
                 if (motionController.handedness === "left") {
                     leftController = controller;
+                    this._leftHandMesh!.setParent(leftController.grip!);
+                    this._leftHandMesh!.setEnabled(true);
+                    this._leftHandMesh!.position.set(0, 0, 0);
+                    this._leftHandMesh!.rotationQuaternion = Quaternion.Identity();
+                    leftController.onDisposeObservable.add(() => {
+                        this._leftHandMesh!.parent = null;
+                        this._leftHandMesh!.setEnabled(false);
+                    });
                 } else if (motionController.handedness === "right") {
                     rightController = controller;
+                    this._rightHandMesh!.setParent(rightController.grip!);
+                    this._rightHandMesh!.setEnabled(true);
+                    this._rightHandMesh!.position.set(0, 0, 0);
+                    this._rightHandMesh!.rotationQuaternion = Quaternion.Identity();
+                    rightController.onDisposeObservable.add(() => {
+                        this._rightHandMesh!.parent = null;
+                        this._rightHandMesh!.setEnabled(false);
+                    });
                 }
                 controller.grip!.rotationQuaternion = Quaternion.Identity();
             });
@@ -128,7 +160,7 @@ export class MeetingSpaceScene extends Scene {
 
     private _addRemoteAttendee(dataConnection: AsyncDataConnection, mediaConnection: AsyncMediaConnection) {
         const peerId = dataConnection.peerId;
-        const attendee = new RemoteAttendee(this, dataConnection, mediaConnection);
+        const attendee = new RemoteAttendee(this, dataConnection, mediaConnection, this._assetsHostUrl);
         this._remoteAttendees.set(peerId, attendee);
 
         attendee.OnDisconnectedObservable.addOnce(() => {

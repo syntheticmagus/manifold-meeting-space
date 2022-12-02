@@ -1,6 +1,7 @@
 import { Sound } from "@babylonjs/core/Audio/sound";
+import { SceneLoader } from "@babylonjs/core/Loading/sceneLoader";
 import { Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector";
-import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
+import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
 import { Observable, Observer } from "@babylonjs/core/Misc/observable";
 import { Scene } from "@babylonjs/core/scene";
@@ -32,7 +33,7 @@ export class RemoteAttendee {
         return this._onDisconnectedObservable;
     }
 
-    public constructor(scene: Scene, dataConnection: AsyncDataConnection, mediaConnection: AsyncMediaConnection) {
+    public constructor(scene: Scene, dataConnection: AsyncDataConnection, mediaConnection: AsyncMediaConnection, assetsHostUrl: string) {
         this._dataConnection = dataConnection;
         this._mediaConnection = mediaConnection;
 
@@ -118,15 +119,25 @@ export class RemoteAttendee {
             this._audioStream.attachToMesh(this._audioStreamNode);
         });
 
-        // TODO: Create the actual visuals.
-        const cameraBox = MeshBuilder.CreateBox("remoteAttendee_cameraBox", { size: 0.2 }, scene);
-        cameraBox.parent = this._cameraNode;
-        const headBox = MeshBuilder.CreateBox("remoteAttendee_headBox", { size: 0.2 }, scene);
-        headBox.parent = this._headNode;
-        const leftHandBox = MeshBuilder.CreateBox("remoteAttendee_leftHandBox", { size: 0.05 }, scene);
-        leftHandBox.parent = this._leftHandNode;
-        const rightHandBox = MeshBuilder.CreateBox("remoteAttendee_rightHandBox", { size: 0.05 }, scene);
-        rightHandBox.parent = this._rightHandNode;
+        SceneLoader.ImportMeshAsync("", assetsHostUrl, "hands_and_head.glb", scene).then((result) => {
+            const headMesh = result.meshes[0];
+            headMesh.setParent(this._headNode);
+            headMesh.position.set(0, 0, 0);
+            headMesh.rotationQuaternion = Quaternion.FromEulerAngles(0, 0, Math.PI);
+
+            const leftHandMesh = result.meshes[1];
+            leftHandMesh.setParent(this._leftHandNode);
+            leftHandMesh.position.set(0, 0, 0);
+            leftHandMesh.rotationQuaternion = Quaternion.Identity();
+
+            const rightHandMesh = result.meshes[2];
+            rightHandMesh.setParent(this._rightHandNode);
+            rightHandMesh.position.set(0, 0, 0);
+            rightHandMesh.rotationQuaternion = Quaternion.Identity();
+            
+            // TODO: Replace this with a real camera mesh.
+            headMesh.instantiateHierarchy(this._cameraNode, { doNotInstantiate: true });
+        });
     }
 
     public sendMessage(message: any): void {
