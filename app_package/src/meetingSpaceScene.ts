@@ -7,12 +7,12 @@ import { AsyncDataConnection, AsyncMediaConnection, AsyncPeer } from "./asyncPee
 import { LocalAttendee } from "./localAttendee";
 import { RemoteAttendee } from "./remoteAttendee";
 import { Tools } from "@babylonjs/core/Misc/tools";
-import { Nullable } from "@babylonjs/core/types";
-import { WebXRAbstractMotionController } from "@babylonjs/core/XR/motionController/webXRAbstractMotionController";
 import { WebXRInputSource } from "@babylonjs/core/XR/webXRInputSource";
 import { WebXRFeatureName } from "@babylonjs/core/XR/webXRFeaturesManager";
+import { CubeTexture } from "@babylonjs/core/Materials/Textures/cubeTexture";
+import { PBRMaterial } from "@babylonjs/core/Materials/PBR/pbrMaterial";
 
-// import "@babylonjs/inspector";
+//import "@babylonjs/inspector";
 
 export interface IMeetingSpaceSceneParams {
     engine: Engine;
@@ -44,16 +44,30 @@ export class MeetingSpaceScene extends Scene {
 
     private async _initializeVisualsAsync(): Promise<void> {
         this.createDefaultLight();
-        await SceneLoader.ImportMeshAsync("", this._assetsHostUrl, "vr_room.glb");
+        await SceneLoader.ImportMeshAsync("", this._assetsHostUrl, "manifold_room.glb");
+
+        const centerEnvironmentTexture = CubeTexture.CreateFromPrefilteredData(`${this._assetsHostUrl}/bake_environment_center.env`, this);
+        this.environmentTexture = centerEnvironmentTexture;
+        
+        const counterEnvironmentTexture = CubeTexture.CreateFromPrefilteredData(`${this._assetsHostUrl}/bake_environment_counter.env`, this);
+        (this.getMeshByName("counter_top")!.material as PBRMaterial).reflectionTexture = counterEnvironmentTexture;
+
+        const tvEnvironmentTexture = CubeTexture.CreateFromPrefilteredData(`${this._assetsHostUrl}/bake_environment_tv.env`, this);
+        (this.getMeshByName("tv")!.material as PBRMaterial).reflectionTexture = tvEnvironmentTexture;
+
+        const whiteboardEnvironmentTexture = CubeTexture.CreateFromPrefilteredData(`${this._assetsHostUrl}/bake_environment_whiteboard.env`, this);
+        (this.getMeshByName("whiteboard")!.material as PBRMaterial).reflectionTexture = whiteboardEnvironmentTexture;
+
+        const windowEnvironmentTexture = CubeTexture.CreateFromPrefilteredData(`${this._assetsHostUrl}/bake_environment_window.env`, this);
+        (this.getMeshByName("window_glass")!.material as PBRMaterial).reflectionTexture = windowEnvironmentTexture;
 
         const camera = new FreeCamera("camera", new Vector3(0, 1.6, 0), this, true);
         camera.rotationQuaternion = Quaternion.Identity();
         camera.attachControl();
         camera.speed = 0.04;
         camera.minZ = 0.01;
-        camera.maxZ = 30;
-
-        const env = this.createDefaultEnvironment({ createGround: false, createSkybox: false });
+        camera.maxZ = 100;
+        
         const xr = await this.createDefaultXRExperienceAsync({
             floorMeshes: [this.getMeshByName("floor")!]
         });
@@ -175,6 +189,7 @@ export class MeetingSpaceScene extends Scene {
         const localAttendee = new LocalAttendee();
         const meetingSpace = new MeetingSpaceScene(params, localAttendee);
         await meetingSpace._initializeVisualsAsync();
+        //meetingSpace.debugLayer.show();
         return meetingSpace;
     }
 }
