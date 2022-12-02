@@ -55,6 +55,7 @@ export class MeetingSpaceScene extends Scene {
 
         const centerEnvironmentTexture = CubeTexture.CreateFromPrefilteredData(`${this._assetsHostUrl}/bake_environment_center.env`, this);
         this.environmentTexture = centerEnvironmentTexture;
+        this.imageProcessingConfiguration.exposure = 1.5;
         
         const counterEnvironmentTexture = CubeTexture.CreateFromPrefilteredData(`${this._assetsHostUrl}/bake_environment_counter.env`, this);
         (this.getMeshByName("counter_top")!.material as PBRMaterial).reflectionTexture = counterEnvironmentTexture;
